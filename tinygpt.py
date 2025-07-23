@@ -95,9 +95,78 @@ def estimate_loss(model, splits, block_size, batch_size, iters=20):
     return out
 
 
+def train(a):
+    torch.manual_seed(a.seed)
+    torch.set_num_threads(a.threads)
+    text = open(a.data, encoding="utf-8").read()
+    chars = sorted(set(text))
+    stoi = {c: i for i, c in enumerate(chars)}
+    data = torch.tensor([stoi[c] for c in text])
+    n = int(0.9 * len(data))
+    splits = {"train": data[:n], "val": data[n:]}
+
+    if a.quick:
+        cfg = dict(block_size=64, n_layer=3, n_head=4, d=128, dropout=0.0)
+        steps, batch_size = 600, 32
+    else:
+        cfg = dict(block_size=96, n_layer=4, n_head=4, d=128, dropout=0.1)
+        steps, batch_size = 1500, 32
+    cfg["tie"] = not a.no_tie
+    model = GPT(len(chars), **cfg)
+    print(f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f}M params, vocab {len(chars)}, "
+          f"{len(text)} chars")
+    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.1)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=steps, pct_start=0.05)
+
+    t0 = time.time()
+    for step in range(steps + 1):
+        if step % (steps // 6) == 0:
+            losses = estimate_loss(model, splits, cfg["block_size"], batch_size)
+            print(f"step {step:5d}  train {losses['train']:.3f}  val {losses['val']:.3f}  "
+                  f"{time.time() - t0:.0f}s")
+        if step == steps:
+            break
+        _, loss = model(*get_batch(splits["train"], cfg["block_size"], batch_size))
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
+        sched.step()
+
+    torch.save({"model": model.state_dict(), "cfg": cfg, "chars": chars}, a.ckpt)
+    print(f"saved {a.ckpt}\n")
+    print(sample_text(model, chars, "ROMEO:\n", 400, 0.8, 20))
 
 
+def sample_text(model, chars, prompt, n, temperature, top_k):
+    stoi = {c: i for i, c in enumerate(chars)}
+    model.eval()
+    idx = torch.tensor([[stoi[c] for c in prompt if c in stoi] or [0]])
+    out = model.generate(idx, n, temperature, top_k)
+    return "".join(chars[i] for i in out[0].tolist())
 
 
+def sample(a):
+    torch.manual_seed(a.seed)
+    ck = torch.load(a.ckpt)
+    model = GPT(len(ck["chars"]), **ck["cfg"])
+    model.load_state_dict(ck["model"])
+    print(sample_text(model, ck["chars"], a.prompt, a.length, a.temperature, a.top_k))
 
 
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="character-level GPT")
+    ap.add_argument("mode", choices=["train", "sample"])
+    ap.add_argument("--data", default="shakespeare.txt")
+    ap.add_argument("--ckpt", default="ckpt.pt")
+    ap.add_argument("--quick", action="store_true", help="smaller model, fewer steps (a few minutes on CPU)")
+    ap.add_argument("--no-tie", action="store_true", help="untie input embedding and output head")
+    ap.add_argument("--lr", type=float, default=2e-3)
+    ap.add_argument("--threads", type=int, default=4, help="more threads ran slower on my laptop")
+    ap.add_argument("--seed", type=int, default=1337)
+    ap.add_argument("--prompt", default="\n")
+    ap.add_argument("--length", type=int, default=500)
+    ap.add_argument("--temperature", type=float, default=0.8)
+    ap.add_argument("--top-k", type=int, default=20)
+    a = ap.parse_args()
+    train(a) if a.mode == "train" else sample(a)
