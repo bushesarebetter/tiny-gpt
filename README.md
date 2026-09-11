@@ -1,3 +1,5 @@
+[![Tests](https://github.com/bushesarebetter/tiny-gpt/actions/workflows/tests.yml/badge.svg)](https://github.com/bushesarebetter/tiny-gpt/actions/workflows/tests.yml)
+
 # tiny-gpt
 
 A character-level, decoder-only transformer in PyTorch: causal multi-head self-attention, pre-LayerNorm blocks, learned positional embeddings, and optional weight tying between the token embedding and the output head. It trains on CPU in a few minutes.
