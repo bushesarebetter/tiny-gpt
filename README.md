@@ -1,20 +1,24 @@
+# Tiny GPT
+
 [![Tests](https://github.com/bushesarebetter/tiny-gpt/actions/workflows/tests.yml/badge.svg)](https://github.com/bushesarebetter/tiny-gpt/actions/workflows/tests.yml)
 
-# tiny-gpt
-
 A character-level, decoder-only transformer in PyTorch: causal multi-head self-attention, pre-LayerNorm blocks, learned positional embeddings, and optional weight tying between the token embedding and the output head. It trains on CPU in a few minutes.
+
+[Training text](#training-text) · [Setup](#setup) · [Run](#run) · [Results](#results) · [Tests](#test)
+
+## Training text
 
 The training text is `shakespeare.txt` (65 KB, about 1,700 lines). I typed it out from public-domain Shakespeare: a few dozen sonnets plus well-known speeches and songs from the plays. It's a small corpus and the model overfits quickly. The samples look like Shakespeare from across the room and fall apart up close.
 
 ## Setup
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 ## Run
 
-```
+```bash
 python tinygpt.py train --quick      # 0.6M params, 600 steps, ~4-5 min
 python tinygpt.py train              # 0.8M params, 1500 steps, ~25 min on my laptop
 python tinygpt.py sample --prompt "JULIET:" --length 500 --temperature 0.8 --top-k 20
@@ -33,7 +37,7 @@ Losses are mean cross-entropy per character in nats, over a 90/10 train/val spli
 
 Sample from the default checkpoint (temperature 0.7, top-k 10):
 
-```
+```text
 JULIET:
 So more the sweetings of their stands,
 To this stand speaks of these of your shing?
@@ -41,7 +45,7 @@ To this stand speaks of these of your shing?
 
 ## Test
 
-```
+```bash
 python -m pytest -q
 ```
 
